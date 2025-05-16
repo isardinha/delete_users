@@ -1,0 +1,62 @@
+# Sempre que rodar o script ele vai fazer a consulta no usuário e pode alterar a data de acesso.
+
+# Caminho dos perfis de usuário
+$perfilPath = "C:\Users"
+# Dias de inatividade
+$diasInativo = 90 
+$hoje = Get-Date
+# Lista base de perfis que NÃO devem ser removidos
+$ignorarPerfis = @(
+    "Default", "Default User", "Public", "All Users",
+    "Administrator", "admin", "desktop.ini"
+)
+# Adiciona usuários locais do computador à lista de ignorados
+$usuariosLocais = Get-LocalUser | Where-Object { $_.Enabled } | Select-Object -ExpandProperty Name
+$ignorarPerfis += $usuariosLocais
+Write-Host "`n=== Verificando perfis com mais de $diasInativo dias de inatividade...`n"
+# Coleta os perfis
+$perfis = Get-ChildItem -Path $perfilPath | Where-Object {
+    $_.PSIsContainer -and -not ($ignorarPerfis -contains $_.Name)
+}
+$perfisInativos = @()
+foreach ($perfil in $perfis) {
+    $diasSemUso = ($hoje - $perfil.LastWriteTime).Days
+    if ($diasSemUso -ge $diasInativo) {
+        Write-Host "[INATIVO] $($perfil.Name) - $diasSemUso dias sem uso" -ForegroundColor Yellow
+        $perfisInativos += $perfil
+    } else {
+        Write-Host "[ATIVO  ] $($perfil.Name) - $diasSemUso dias" -ForegroundColor Green
+    }
+}
+if ($perfisInativos.Count -eq 0) {
+    Write-Host "`nNenhum perfil inativo encontrado com mais de $diasInativo dias.`n"
+    pause
+    exit
+}
+Write-Host "`nDeseja remover esses $($perfisInativos.Count) perfis inativos? (S/N)"
+$resposta = Read-Host
+# Listas para relatórios
+$removidosComSucesso = @()
+$naoRemovidos = @()
+if ($resposta -eq "S" -or $resposta -eq "s") {
+    foreach ($perfil in $perfisInativos) {
+        try {
+            Write-Host "Removendo $($perfil.FullName)..." -ForegroundColor Red
+            Remove-Item -Path $perfil.FullName -Recurse -Force -ErrorAction Stop
+            $removidosComSucesso += $perfil.Name
+        } catch {
+            Write-Warning "Erro ao remover $($perfil.FullName): $_"
+            $naoRemovidos += $perfil.Name
+        }
+    }
+    # Relatório final
+    Write-Host "`n=== RELATÓRIO FINAL ===`n"
+    Write-Host "`n✅ Perfis removidos com sucesso ($($removidosComSucesso.Count)):"
+    $removidosComSucesso | ForEach-Object { Write-Host "  - $_" }
+    Write-Host "`n❌ Perfis que NÃO foram removidos ($($naoRemovidos.Count)):"
+    $naoRemovidos | ForEach-Object { Write-Host "  - $_" }
+    Write-Host "`nTotal de perfis analisados para remoção: $($perfisInativos.Count)`n"
+} else {
+    Write-Host "`nNenhum perfil foi removido.`n"
+}
+pause
