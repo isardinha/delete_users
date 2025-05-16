@@ -1,0 +1,11 @@
+$ip = "IP"
+$ports = @(PORTA, PORTA)
+
+foreach ($port in $ports){
+    $connection = Test-NetConnection -ComputerName $ip -Port $port
+    if ($connection.TcpTestSucceeded){
+        Write-Output "Conexão bem-sucedida na porta $port"
+        } else {
+            Write-Output "Falha na conexão na porta $port"
+            }
+}
